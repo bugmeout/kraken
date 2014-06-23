@@ -1,0 +1,1 @@
+%~dp0\App\pythonw.exe %~dp0\agent\bin\kraken.py

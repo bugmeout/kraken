@@ -40,13 +40,13 @@ The Kraken agent is meant to be self-contained and does not require any installa
 The Kraken's web interface and control server are a Django application based. The use of a python virtual environment is recommended.
 
 1. Clone the panel directory onto any Ubuntu 14.04 server instance
-2. Install dependencies: `django-panel$ pip install django django-suit`
+2. Install dependencies: `django-panel$ pip install django django-suit bson`
 3. Run the Django webserver: `django-panel$ python manage.py runserver 0.0.0.0:80`
 4. Hunt!
 
 
 ## Roadmap
-The Kraken has a long roadmap ahead of it. You are all encouraged to contribute. The project is at such an early stage that small contributions entail great progress. 
+The Kraken has a long roadmap ahead of it. You are all encouraged to contribute. The project is at such an early stage that small contributions entail great progress.
 
 Some ideas:
 
@@ -56,12 +56,3 @@ Some ideas:
 * Add some encryption
 * OpenIOC itegration
 * Live memory forensics (probably using rekall)
-
-
-
-
-
-
-
-
-

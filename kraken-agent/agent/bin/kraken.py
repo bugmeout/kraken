@@ -1,6 +1,6 @@
 import os, time, datetime, re, socket
 import subprocess, multiprocessing, threading
-import http.client, json, urllib.parse, urllib.request, pickle
+import http.client, json, urllib.parse, urllib.request, bson
 import configparser, io, platform
 import ctypes
 
@@ -22,7 +22,7 @@ class Kraken(multiprocessing.Process):
 	def __init__(self):
 		multiprocessing.Process.__init__(self)
 		log("Launching main process")
-		
+
 		self.ssdeep_output = os.path.dirname(os.path.abspath(__file__)) + '\\..\\results\\ssdeep_output.txt'
 		self.hashdeep_output = os.path.dirname(os.path.abspath(__file__)) + '\\..\\results\\hashdeep_output.txt'
 
@@ -117,7 +117,7 @@ class Kraken(multiprocessing.Process):
 					time.sleep(self.config_refresh_period)
 					continue
 				self.parse_config(config)
-				
+
 				game = self.hunt()
 				log("%s matches found" % len(game))
 				self.send_hunt_results(game, len(game))
@@ -146,36 +146,36 @@ class Kraken(multiprocessing.Process):
 		except Exception as e:
 			data = None
 			log("ERROR: Could not retreive data (HTTP status != 200)")
-		
+
 		return data
 
 
 	def send_command_results(self, results):
 		# results = urllib.parse.urlencode(params)
 		log("Sending command results...", end='')
-		results = pickle.dumps(results)
+		results = bson.dumps(results)
 		self.do_http_request(uri="command_results/", data=results)
 
 
 	def send_hunt_results(self, game, matches):
 		log("Uploading hunt results... ", end='')
-		params = pickle.dumps({'game':game, 'matches':matches, 'node_id': self.info['node']})
+		params = bson.dumps({'game':game, 'matches':matches, 'node_id': self.info['node']})
 		headers = {'Content-type': "application/json"}
 		result = self.do_http_request(uri='gate.php', data=params)
-		
-		
 
-	def fetch_config(self):	
+
+
+	def fetch_config(self):
 		log("Fetching config... ", end='')
-		
+
 		info_param = urllib.parse.urlencode(self.info)
-		uri = "gate.php?%s" % info_param 
+		uri = "gate.php?%s" % info_param
 		config = self.do_http_request(uri=uri)
 		if config: config = config.decode('utf-8')
 
 		return config
-		
-		
+
+
 	def parse_config(self, config):
 		# load config
 
@@ -192,7 +192,7 @@ class Kraken(multiprocessing.Process):
 
 		if parser.has_section('fs-regex'):
 			self.regexs = parser.items('fs-regex')
-			
+
 		if parser.has_section('ctph'):
 			self.ctph = parser.items('ctph')
 
@@ -276,7 +276,7 @@ class Kraken(multiprocessing.Process):
 				log("run_commands ERROR: %s" % e)
 				data = "ERROR: %s" % e
 				done = False
-				
+
 			results.append({'data':data, 'command_id': id, 'done': done})
 
 		return results
@@ -301,7 +301,7 @@ class Kraken(multiprocessing.Process):
 		except Exception as e:
 			log("regkey ERROR: %s" % e)
 			retval = "ERROR: %s" % e
-		
+
 		return retval
 
 
@@ -320,7 +320,7 @@ class Kraken(multiprocessing.Process):
 	def getfile(self, filename, encrypted=False):
 		if not encrypted:
 			try:
-				
+
 				retval = open(filename, 'rb').read()
 			except Exception as e:
 				log("getfile ERROR: %s" % e)
@@ -361,7 +361,7 @@ class Kraken(multiprocessing.Process):
 				output.close()
 				#t_ssdeep = self.run_ssdeep(recursive=True)
 				open(self.log_path, 'w+').write("LAST_HASH_RUN=%s" % datetime.datetime.strftime(datetime.datetime.now(), "%a %b %d %H:%M:%S %Y"))
-				
+
 			except Exception as e:
 				log("refresh_hash_lists ERROR: %s" % e)
 			except KeyboardInterrupt as e:
@@ -375,13 +375,13 @@ class Kraken(multiprocessing.Process):
 			output = open(self.hashdeep_output, 'wb+')
 		else:
 			output = output_file
-		
+
 		flags = ''
 		if recursive: flags += '-r'
 		args = [self.hashdeep_exe, flags, directory]
-		
+
 		log("Calling hashdeep on %s..." % directory)
-		
+
 		t0 = datetime.datetime.now()
 
 		startupinfo = subprocess.STARTUPINFO()
@@ -395,18 +395,18 @@ class Kraken(multiprocessing.Process):
 		if not output_file:
 			output.close()
 
-		
+
 		log("Done! hashdeep run on %s took %s" % (directory, str(t1-t0)))
 		return t1
 
-		
+
 	def run_ssdeep(self, directory='C:\\', recursive=False):
 		output = open(self.ssdeep_output, 'wb+')
 
 		rerun = []
-		
+
 		t0 = datetime.datetime.now()
-		
+
 		if recursive:
 			log("Calling ssdeep recursively...")
 			for root, dirs, files in os.walk(directory):

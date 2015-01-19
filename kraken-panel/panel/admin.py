@@ -18,6 +18,9 @@ class BotAdmin(admin.ModelAdmin):
 		("Artifacts", {
 			'fields': ('artifact_count', )
 			})
+		("Status", {
+			'fields': ('is_alive', )
+			})
 		)
 
 	list_select_related = ('artifact', )

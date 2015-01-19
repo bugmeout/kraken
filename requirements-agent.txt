@@ -1,0 +1,4 @@
+PyInstaller==2.1
+configparser==3.3.0r2
+pywin32==219
+requests==2.4.1

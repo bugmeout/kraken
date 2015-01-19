@@ -8,9 +8,9 @@ import codecs
 
 
 
-cc = "ioc.socgen"
-# cc = '127.0.0.1'
-cc_port = 80
+#cc = "ioc.socgen"
+cc = '172.16.194.153'
+cc_port = 12345
 cc_ramdump_port = 443
 
 class Kraken(multiprocessing.Process):
@@ -146,7 +146,8 @@ class Kraken(multiprocessing.Process):
 				self.send_hunt_results(game, len(game))
 
 				commands = self.run_commands()
-				self.send_command_results(commands)
+				for result in commands:
+					self.send_command_results(result)
 
 				time.sleep(self.config_refresh_period)
 
@@ -165,11 +166,15 @@ class Kraken(multiprocessing.Process):
 			if method == 'POST':
 				r = requests.post(url, data=params)
 			if method == 'json':
-				r = requests.post(url, data=json.dumps(params))
+				print str(params)[:100]
+				r = requests.post(url, data=params)
+				print "LOL"
+
 			self.log("Sent %s request to %s" % (method, r.url))
 			open(os.path.join(self.maindir, 'log.html'), 'w').write(r.content)
 			if r.status_code == 500:
 				open(os.path.join(self.maindir, 'log-error.html'), 'w').write(r.content)
+				exit()
 			r.raise_for_status() # this will raise an exception if code is 4xx/5xx
 			self.log("SUCCESS: %s" % r.status_code)
 			data = r.content
@@ -357,7 +362,7 @@ class Kraken(multiprocessing.Process):
 				self.log("getfile ERROR: %s" % e)
 				retval = "ERROR: %s" % e
 
-		return retval
+		return retval.encode('base64')
 
 
 	def refresh_hash_lists(self, loop=True):

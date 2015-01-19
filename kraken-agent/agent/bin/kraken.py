@@ -1,51 +1,50 @@
-import os, time, datetime, re, socket
+import os, time, datetime, re, socket, sys
 import subprocess, multiprocessing, threading
-import http.client, json, urllib.parse, urllib.request, bson
+import json, requests
 import configparser, io, platform
 import ctypes
+import hashlib
+import codecs
 
 
 
 cc = "ioc.socgen"
-#cc = '127.0.0.1'
+# cc = '127.0.0.1'
 cc_port = 80
 cc_ramdump_port = 443
 
-def log(line, end=""):
-	print(line)
-	with open('log.txt', 'a+') as logfile:
-		logfile.write("[%s]"%datetime.datetime.now()+str(line)+"\n")
-
-
 class Kraken(multiprocessing.Process):
 	"""Main process for IOCFinder"""
-	def __init__(self):
-		multiprocessing.Process.__init__(self)
-		log("Launching main process")
 
-		self.ssdeep_output = os.path.dirname(os.path.abspath(__file__)) + '\\..\\results\\ssdeep_output.txt'
-		self.hashdeep_output = os.path.dirname(os.path.abspath(__file__)) + '\\..\\results\\hashdeep_output.txt'
+	def log(self, line, end=""):
+		print line
+		with codecs.open(self.log_path, mode='w+', encoding='utf-8') as logfile:
+			logfile.write(u"[{}] {}\n".format(datetime.datetime.now(), line))
+			logfile.flush()
+
+	def __init__(self):
+		
+		multiprocessing.Process.__init__(self)
+		datetime.datetime.strptime("2014", "%Y")
+		self.maindir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+		self.log_path = os.path.join(self.maindir, 'conf', 'log.txt')
+		self.hashdeep_output = os.path.join(self.maindir, 'results', 'hashdeep_output.txt')
+		self.hashdeep_log = os.path.join(self.maindir, 'results', 'hashdeep_log.txt')
 
 		self.hash_thread = None
-		self.hash_refresh_period = 1*60*60 # Every 24 hours = 24*60*60
+		self.hash_refresh_period = 24*60*60*2 # Every 24 hours = 24*60*60
 		self.hash_refresh_delta = datetime.timedelta(seconds=self.hash_refresh_period)
 
 		self.config_thread = None
-		self.config_refresh_period = 60*60*6 # Every 6 hours = 6*60*60
+		self.config_refresh_period = 10 # Every 6 hours = 6*60*60
 
 		self.info = self.gather_system_info()
 
-		if self.info['machine'].find('64') != -1:
-			self.hashdeep_exe = os.path.dirname(os.path.abspath(__file__)) + '\\hashdeep64.exe'
-		else:
-			self.hashdeep_exe = os.path.dirname(os.path.abspath(__file__)) + '\\hashdeep.exe'
-
-		self.ssdeep_exe = os.path.dirname(os.path.abspath(__file__)) + '\\ssdeep.exe'
 		self.dumpit_exe = os.path.dirname(os.path.abspath(__file__)) + '\\DumpIt.exe'
 		self.openssl_exe = os.path.dirname(os.path.abspath(__file__)) + '\\openssl\\openssl.exe'
 		self.public_key = os.path.dirname(os.path.abspath(__file__)) + '\\openssl\\public.pem'
 
-		self.log_path = os.path.dirname(os.path.abspath(__file__)) + '\\..\\conf\\log.txt'
+		self.conf_path = os.path.join(self.maindir, 'conf', 'conf.txt')
 
 		# make hash list
 		self.hashes = []
@@ -60,15 +59,38 @@ class Kraken(multiprocessing.Process):
 			'cc_ramdump_port' : cc_ramdump_port
 		}
 
+
+		self.check_files()
+		self.log("Kraken v0.1 alpha")
 		self.load_config()
+
+		
+		self.total_waited = 0
+		self.delay_ms = 100
+
+
+	def check_files(self):
+		essential_dirs = []
+		essential_dirs.append(os.path.join(self.maindir, 'results'))
+		essential_dirs.append(os.path.join(self.maindir, 'bin'))
+		essential_dirs.append(os.path.join(self.maindir, 'conf'))
+		essential_dirs.append(os.path.join(self.maindir, 'bin', 'openssl'))
+		essential_dirs.append(os.path.join(self.maindir, 'bin', 'openssl', 'openssl.exe'))
+		essential_dirs.append(os.path.join(self.maindir, 'bin', 'openssl', 'public.pem'))
+
+		sys.stderr.write("Checking for essential directories...")
+		for directory in essential_dirs:
+			if not os.path.exists(directory):
+				sys.stderr.write("FATAL ERROR: %s does not exist" % directory)
+				exit(-1)
 
 	def load_config(self):
 		config = configparser.ConfigParser()
-		config.read(os.path.dirname(os.path.abspath(__file__)) + '\\..\\conf\\conf.txt')
-		if 'config_update' not in config: return
+		config.read(self.conf_path)
+		if not config.has_section('config_update'): return
 		for key in config['config_update']:
 			self.config[key] = config['config_update'][key]
-		log("Configuration loaded from %s" % os.path.dirname(os.path.abspath(__file__)) + '\\..\\conf\\conf.txt')
+		self.log("Configuration loaded from %s" % self.conf_path)
 
 
 	def update_config(self, config):
@@ -81,12 +103,12 @@ class Kraken(multiprocessing.Process):
 		self.config['cc_port'] = conf_dict.get('cc_port', self.config['cc_port'])
 		self.config['cc_ramdump_port'] = conf_dict.get('cc_ramdump_port', self.config['cc_ramdump_port'])
 
-		log("Configuration updated")
+		self.log("Configuration updated")
 		saved_config = configparser.ConfigParser()
 		saved_config['config_update'] = self.config
-		with open(os.path.dirname(os.path.abspath(__file__)) + '\\..\\conf\\conf.txt', 'w+') as configfile:
+		with open(self.conf_path, 'w+') as configfile:
 			saved_config.write(configfile)
-		log("Configuration file saved to %s" % os.path.dirname(os.path.abspath(__file__)) + '\\..\\conf\\conf.txt')
+		self.log("Configuration file saved to %s" % self.conf_path)
 
 
 	def gather_system_info(self):
@@ -105,10 +127,11 @@ class Kraken(multiprocessing.Process):
 
 		return info
 
-	def run(self):
-		self.hash_thread = threading.Thread(target=self.refresh_hash_lists)
-		self.hash_thread.daemon = True
-		# self.hash_thread.start()
+	def run(self, do_hash=False):
+
+		if do_hash:
+			self.refresh_hash_lists()
+			return
 
 		while self.run:
 			try:
@@ -119,7 +142,7 @@ class Kraken(multiprocessing.Process):
 				self.parse_config(config)
 
 				game = self.hunt()
-				log("%s matches found" % len(game))
+				self.log("%s matches found" % len(game))
 				self.send_hunt_results(game, len(game))
 
 				commands = self.run_commands()
@@ -132,49 +155,46 @@ class Kraken(multiprocessing.Process):
 				return
 
 
-	def do_http_request(self, uri, data=None):
-		log("Requesting URL: http://%s:%s/%s" % (self.config['cc'], self.config['cc_port'], uri))
-		info_param = urllib.parse.urlencode(self.info)
-		if data == None:
-			request = urllib.request.Request(url="http://%s:%s/%s" %(self.config['cc'], self.config['cc_port'], uri))
-		else:
-			request = urllib.request.Request(url="http://%s:%s/%s" %(self.config['cc'], self.config['cc_port'], uri), data=data)
+	def do_http_request(self, uri, params=None, method='GET'):
+		url = "http://%s:%s/%s" % (self.config['cc'], self.config['cc_port'], uri)
+		data = None
+
 		try:
-			r = urllib.request.urlopen(request)
-			data = r.read()
-			log(r.getcode())
-		except Exception as e:
-			data = None
-			log("ERROR: Could not retreive data (HTTP status != 200)")
+			if method =='GET':
+				r = requests.get(url, params=params)
+			if method == 'POST':
+				r = requests.post(url, data=params)
+			if method == 'json':
+				r = requests.post(url, data=json.dumps(params))
+			self.log("Sent %s request to %s" % (method, r.url))
+			open(os.path.join(self.maindir, 'log.html'), 'w').write(r.content)
+			if r.status_code == 500:
+				open(os.path.join(self.maindir, 'log-error.html'), 'w').write(r.content)
+			r.raise_for_status() # this will raise an exception if code is 4xx/5xx
+			self.log("SUCCESS: %s" % r.status_code)
+			data = r.content
+		except requests.exceptions.ConnectionError, e:
+			self.log("ERROR: Could not retreive data: %s" % e)
+		except requests.exceptions.HTTPError, e:
+			self.log("ERROR: Could not retrieve data: %s" % e)
 
 		return data
 
-
 	def send_command_results(self, results):
-		# results = urllib.parse.urlencode(params)
-		log("Sending command results...", end='')
-		results = bson.dumps(results)
-		self.do_http_request(uri="command_results/", data=results)
-
+		self.log("Sending command results...", end='')
+		self.do_http_request(uri="command_results/", params=results, method='json')
 
 	def send_hunt_results(self, game, matches):
-		log("Uploading hunt results... ", end='')
-		params = bson.dumps({'game':game, 'matches':matches, 'node_id': self.info['node']})
-		headers = {'Content-type': "application/json"}
-		result = self.do_http_request(uri='gate.php', data=params)
-
-
+		self.log("Uploading hunt results... ", end='')
+		params = {'game':game, 'matches': matches, 'node_id': self.info['node']}
+		result = self.do_http_request(uri='gate.php', params=params, method='json')
 
 	def fetch_config(self):
-		log("Fetching config... ", end='')
-
-		info_param = urllib.parse.urlencode(self.info)
-		uri = "gate.php?%s" % info_param
-		config = self.do_http_request(uri=uri)
-		if config: config = config.decode('utf-8')
-
-		return config
-
+		self.log("Fetching config... ", end='')
+		uri = "gate.php"
+		config = self.do_http_request(uri=uri, params=self.info)
+		if config:
+			return config.decode('utf8')
 
 	def parse_config(self, config):
 		# load config
@@ -206,35 +226,40 @@ class Kraken(multiprocessing.Process):
 				self.fetch_config()
 			self.update_config(config=config)
 
-		# log(self.hashes)
-		# log(self.regexs)
-		# log(self.ctph)
-		# log(self.commands)
+		# self.log(self.hashes)
+		# self.log(self.regexs)
+		# self.log(self.ctph)
+		# self.log(self.commands)
 
 	def hunt(self):
 
 		findings = []
 
-		log("Checking hashes & regexs...")
+		self.log("Checking hashes & regexs...")
+
 		lnum = 0
+		
 		try:
-			f = open(self.hashdeep_output, encoding='mbcs')
+			f = codecs.open(self.hashdeep_output, 'r', encoding='utf-16')
 		except Exception as e:
+			self.log("Something went wrong when trying to open %s: %s" % (self.hashdeep_output, e))
 			f = []
 
 		for line in f:
+
 			lnum += 1
 			for hash in self.hashes:
 				if line.find(hash[1]) != -1:
-					log("Found %s hash on system: %s (%s)" %(hash[1], line, str(lnum)))
+
+					self.log("Found %s hash on system: %s (%s)" %(hash[1], line, str(lnum)))
 					findings.append((hash[0], line, lnum))
 
 			for regex in self.regexs:
 				if re.search(regex[1], line) != None:
-					log("Found %s regex on filesystem: %s (%s)" % (regex[1], line, str(lnum)))
+					self.log("Found %s regex on filesystem: %s (%s)" % (regex[1], line, str(lnum)))
 					findings.append((regex[0], line, lnum))
 
-		log("Checking CTPH...")
+		self.log("Checking CTPH...")
 		lnum = 0
 		try:
 			f = open(self.hashdeep_output, encoding='mbcs')
@@ -245,7 +270,7 @@ class Kraken(multiprocessing.Process):
 			lnum += 1
 			for c in self.ctph:
 				if line.find(c[1]) != -1:
-					log("Found %s CTPH on system: %s (%s)" %(c[1], line, str(lnum)))
+					self.log("Found %s CTPH on system: %s (%s)" %(c[1], line, str(lnum)))
 					findings.append((c[0], line, lnum))
 
 		return findings
@@ -258,7 +283,7 @@ class Kraken(multiprocessing.Process):
 			cmd_type = c[1].split(';')[0]
 			body = c[1].split(';')[1]
 
-			log("Execute %s on %s (id:%s)" % (cmd_type, body, id))
+			self.log("Execute %s on %s (id:%s)" % (cmd_type, body, id))
 
 			try:
 				if cmd_type == 'getfile':
@@ -273,7 +298,7 @@ class Kraken(multiprocessing.Process):
 					data = self.regfind(body)
 				done = True
 			except Exception as e:
-				log("run_commands ERROR: %s" % e)
+				self.log("run_commands ERROR: %s" % e)
 				data = "ERROR: %s" % e
 				done = False
 
@@ -281,15 +306,14 @@ class Kraken(multiprocessing.Process):
 
 		return results
 
-
 	def ramdump(self, botid):
 		try:
 			time.sleep(2)
 			args = [self.dumpit_exe, '/t', cc, '/p', str(self.config['cc_ramdump_port']), '/a']
-			log("Executing RAMDUMP: %s" % " ".join(args))
+			self.log("Executing RAMDUMP: %s" % " ".join(args))
 			retval = subprocess.call(args)
 		except Exception as e:
-			log("ramdump ERROR: %s" % e)
+			self.log("ramdump ERROR: %s" % e)
 			retval = "ERROR: %s" % e
 		return retval
 
@@ -299,7 +323,7 @@ class Kraken(multiprocessing.Process):
 			args = ['reg', 'query', key]
 			retval = subprocess.check_output(args, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
 		except Exception as e:
-			log("regkey ERROR: %s" % e)
+			self.log("regkey ERROR: %s" % e)
 			retval = "ERROR: %s" % e
 
 		return retval
@@ -311,7 +335,7 @@ class Kraken(multiprocessing.Process):
 			args = ['reg', 'query', key, '/f', value, '/s']
 			retval = subprocess.check_output(args, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
 		except Exception as e:
-			log("regfind ERROR: %s" % e)
+			self.log("regfind ERROR: %s" % e)
 			retval = "ERROR: %s" % e
 
 		return retval
@@ -320,10 +344,9 @@ class Kraken(multiprocessing.Process):
 	def getfile(self, filename, encrypted=False):
 		if not encrypted:
 			try:
-
 				retval = open(filename, 'rb').read()
 			except Exception as e:
-				log("getfile ERROR: %s" % e)
+				self.log("getfile ERROR: %s" % e)
 				retval = "ERROR: %s" % e
 		else:
 			try:
@@ -331,110 +354,80 @@ class Kraken(multiprocessing.Process):
 				data = subprocess.check_output(args, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
 				retval = data
 			except Exception as e:
-				log("getfile ERROR: %s" % e)
+				self.log("getfile ERROR: %s" % e)
 				retval = "ERROR: %s" % e
 
 		return retval
 
 
-	def refresh_hash_lists(self):
-
-		while self.run:
-			log("Refreshing hash lists...")
-			try:
-				try:
-					last = open(self.log_path, 'r+').read().split('=')[1]
-					last = datetime.datetime.strptime(last, "%a %b %d %H:%M:%S %Y")
-					delta = datetime.datetime.now() - last
-					if delta < self.hash_refresh_delta:
-						time.sleep((self.hash_refresh_delta - delta).total_seconds())
-				except Exception as e:
-					log("Logfile not found. It will be created.\n%s" % e)
-
-				# exechour = int(math.floor(self.info['ip'].split('.')[-1])/255.0*8))+10
-				# while exechour != datetime.datetime.now().hour:
-				# 	time.sleep(60*30)
-
-				output = open(self.hashdeep_output, 'wb+')
-				t_hashdeep = self.run_hashdeep(directory="C:/", recursive=True, output_file=output)
-				t_hashdeep = self.run_hashdeep(directory="D:/", recursive=True, output_file=output)
-				output.close()
-				#t_ssdeep = self.run_ssdeep(recursive=True)
-				open(self.log_path, 'w+').write("LAST_HASH_RUN=%s" % datetime.datetime.strftime(datetime.datetime.now(), "%a %b %d %H:%M:%S %Y"))
-
-			except Exception as e:
-				log("refresh_hash_lists ERROR: %s" % e)
-			except KeyboardInterrupt as e:
-				log("Process stopped... bailing")
-				self.run = False
-
-
-	def run_hashdeep(self, directory='C:/', recursive=False, output_file=None):
-
-		if not output_file:
-			output = open(self.hashdeep_output, 'wb+')
-		else:
-			output = output_file
-
-		flags = ''
-		if recursive: flags += '-r'
-		args = [self.hashdeep_exe, flags, directory]
-
-		log("Calling hashdeep on %s..." % directory)
-
-		t0 = datetime.datetime.now()
-
-		startupinfo = subprocess.STARTUPINFO()
-		startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-		startupinfo.wShowWindow = subprocess.SW_HIDE
-		proc = subprocess.Popen(args, stdout=output, stderr=output, stdin=subprocess.PIPE, startupinfo=startupinfo)
-
-		proc.wait()
-		t1 = datetime.datetime.now()
-
-		if not output_file:
+	def refresh_hash_lists(self, loop=True):
+		self.log("Refreshing hash lists...")
+		try:
+			self.log("Haslists outdated. Running...")
+			output = codecs.open(self.hashdeep_output, 'wb+', encoding='utf-16')
+			t_hashdeep = self.hash_directory(directory="C:\\", output_file=output)
+			t_hashdeep = self.hash_directory(directory="D:\\", output_file=output)
+			
 			output.close()
 
+		except KeyboardInterrupt as e:
+			self.log("Process stopped... bailing")
+			self.run = False
+				
+	def calculate_hashes(self, filename, chunk_size=102400):
+		
+		md5 =  hashlib.md5()
+		sha1 = hashlib.sha1()
+		sha256 = hashlib.sha256()
 
-		log("Done! hashdeep run on %s took %s" % (directory, str(t1-t0)))
-		return t1
+		if os.stat(filename).st_size > 1024*1024*30:
+			return "[> 10 MB, hash skipped]"
+
+		try:
+			f = open(filename, 'rb')
+		except Exception, e:
+			return ":::%s" % e
+		
+		while True:
+			time.sleep(self.delay_ms/1000.0)
+			self.total_waited += self.delay_ms/1000.0
+			chunk = f.read(chunk_size)
+			if len(chunk) == 0:
+				break
+			md5.update(chunk)
+			sha1.update(chunk)
+			sha256.update(chunk)
+
+		return "%s:%s:%s" % (md5.hexdigest(), sha1.hexdigest(), sha256.hexdigest())
 
 
-	def run_ssdeep(self, directory='C:\\', recursive=False):
-		output = open(self.ssdeep_output, 'wb+')
+	def hash_directory(self, directory='.', output_file=None):
+		self.log("Running hash on directory %s (delay: %sms)" % (directory, self.delay_ms))
 
-		rerun = []
-
+		output_file.write("Hashing on %s started on %s\n##############\n\n" % (directory, datetime.datetime.now()))
+		
 		t0 = datetime.datetime.now()
-
-		if recursive:
-			log("Calling ssdeep recursively...")
-			for root, dirs, files in os.walk(directory):
-				args = [self.ssdeep_exe, root+"\\*"]
-				result = subprocess.call(args, stdout=output, stderr=output)
-				if result != 0:
-					log("Debug: called ssdeep on files in %s (%s)" % (root, result))
-					rerun.append(root)
-		else:
-			args = [self.ssdeep_exe, directory+'\\*.*']
-			result = subprocess.call(args, stdout=output, stderr=output)
-
-		# check for failed directories and run them again, three times max
-		for root in rerun:
-			self.run_ssdeep(self, root, recursive=False, stdout=output, stderr=output)
-
+		for root, dirs, files in os.walk(unicode(directory)):
+			for f in files:
+				file_path = os.path.join(root, f)
+				try:
+					output_file.write(u"%s:%s:%s\n" % (os.path.getsize(file_path), self.calculate_hashes(file_path), file_path))
+				except Exception, e:
+					self.log("Error while parsing filename: %s\n%s" % (e, repr(file_path)))
+					output_file.write(u":%s:%s" % (e, repr(file_path)))
+				
 		t1 = datetime.datetime.now()
-
-		output.close()
-
-		log("Done! ssdeep run took %s" % str(t1-t0))
-
+		
+		self.log("Done! hashdeep run on %s took %s" % (directory, str(t1-t0)))
+		output_file.write("Done! hashdeep run on %s took %s" % (directory, str(t1-t0)))
+		self.log("Total time waiting: %s" % datetime.timedelta(seconds=self.total_waited))
 		return t1
-
-def main():
-	log("Kraken v0.1 alpha")
-	k = Kraken()
-	k.run()
 
 if __name__ == '__main__':
-	main()
+	k = Kraken()
+
+	do_hash = len(sys.argv) >= 2 and sys.argv[1] == 'runhash'
+	if len(sys.argv) == 3:
+		k.delay_ms = int(sys.argv[2])
+	
+	k.run(do_hash)

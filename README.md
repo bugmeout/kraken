@@ -36,7 +36,7 @@ As always, the use of a virtual environment is recommended:
 2. Install your virtual environment: `python virtualenv.py --system-site-packages env-kraken`
 3. Activate it
 4. `pip install -r requirements-agent.txt`
-5. `pip install -r requirements-agent.txt`
+5. `pip install -r requirements-panel.txt`
 
 ### Setup
 The Kraken agents need to be able to issue HTTP requests to the Kraken C2 server (unauthenticated proxy servers are an option).

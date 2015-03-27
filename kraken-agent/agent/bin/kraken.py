@@ -384,7 +384,7 @@ class Kraken(multiprocessing.Process):
 		sha256 = hashlib.sha256()
 
 		if os.stat(filename).st_size > 1024*1024*30:
-			return "[> 10 MB, hash skipped]"
+			return "[> 30 MB, hash skipped]"
 
 		try:
 			f = open(filename, 'rb')

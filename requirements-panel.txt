@@ -3,3 +3,4 @@ PyInstaller==2.1
 configparser==3.3.0post2
 django-suit==0.2.9
 requests==2.3.0
+pymongo==2.8

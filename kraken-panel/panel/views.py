@@ -6,6 +6,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from panel.models import Bot, Artifact, Query, Command, Config #, Hunt
 
 import os, urllib, datetime, multiprocessing, json, re
+from bson import json_util
 # Create your views here.
 
 FILE_DIRECTORY = os.path.join(os.path.dirname(os.path.abspath(__file__)), "UPLOADS")
@@ -157,7 +158,7 @@ def build_configuration(bot):
 def gate(request):
 
 	if request.method == 'POST':
-		data = request.POST
+		data = json_util.loads(request.body)
 		node_id = data['node_id']
 		bot = get_object_or_404(Bot, computer_name=node_id)
 
@@ -194,7 +195,7 @@ def command_results(request):
 	if request.method == 'GET':
 		raise Http404
 
-	c = request.POST
+	c = json_util.loads(request.body)
 	
 	id = c['command_id']
 	done = c['done']

@@ -1,6 +1,7 @@
 import os, time, datetime, re, socket, sys
 import subprocess, multiprocessing, threading
 import json, requests
+from bson import json_util
 import configparser, io, platform
 import ctypes
 import hashlib
@@ -8,9 +9,8 @@ import codecs
 
 
 
-#cc = "ioc.socgen"
-cc = '172.16.194.153'
-cc_port = 12345
+cc = "ioc.socgen"
+cc_port = 8080
 cc_ramdump_port = 443
 
 class Kraken(multiprocessing.Process):
@@ -166,9 +166,8 @@ class Kraken(multiprocessing.Process):
 			if method == 'POST':
 				r = requests.post(url, data=params)
 			if method == 'json':
-				print str(params)[:100]
-				r = requests.post(url, data=params)
-				print "LOL"
+				print json_util.dumps(params)
+				r = requests.post(url, data=json_util.dumps(params))
 
 			self.log("Sent %s request to %s" % (method, r.url))
 			open(os.path.join(self.maindir, 'log.html'), 'w').write(r.content)

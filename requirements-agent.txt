@@ -1,3 +1,4 @@
 PyInstaller==2.1
 configparser==3.3.0post2
 requests==2.4.1
+pymongo==2.8

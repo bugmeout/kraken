@@ -71,18 +71,26 @@ class Kraken(multiprocessing.Process):
 
 	def check_files(self):
 		essential_dirs = []
+		essential_files = []
 		essential_dirs.append(os.path.join(self.maindir, 'results'))
 		essential_dirs.append(os.path.join(self.maindir, 'bin'))
 		essential_dirs.append(os.path.join(self.maindir, 'conf'))
 		essential_dirs.append(os.path.join(self.maindir, 'bin', 'openssl'))
-		essential_dirs.append(os.path.join(self.maindir, 'bin', 'openssl', 'openssl.exe'))
-		essential_dirs.append(os.path.join(self.maindir, 'bin', 'openssl', 'public.pem'))
+		essential_files.append(os.path.join(self.maindir, 'bin', 'openssl', 'openssl.exe'))
+		essential_files.append(os.path.join(self.maindir, 'bin', 'openssl', 'public.pem'))
 
-		sys.stderr.write("Checking for essential directories...")
+		self.log("Checking for essential directories...")
 		for directory in essential_dirs:
+			print directory
 			if not os.path.exists(directory):
-				sys.stderr.write("FATAL ERROR: %s does not exist" % directory)
-				exit(-1)
+				self.log("Directory {} not found. Creating...".format(directory))
+				os.makedirs(directory)
+		
+		self.log("Checking for essential files...")
+		for file in essential_files:
+			if not os.path.exists(file):
+				self.log("FATAL ERROR: %s does not exist" % file)
+				sys.exit(-1)
 
 	def load_config(self):
 		config = configparser.ConfigParser()

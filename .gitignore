@@ -11,7 +11,7 @@ env/
 #bin/
 build/
 develop-eggs/
-dist/
+#dist/
 eggs/
 lib/
 lib64/
@@ -55,7 +55,7 @@ docs/_build/
 # Mac OS X stuff
 .DS_*
 
-# Kraken buly files
+# Kraken bulky files
 #hashdeep_output.txt
 privatekey.pem
 DumpIt.exe
@@ -63,3 +63,6 @@ DumpIt.exe
 #panel/UPLOADS/*
 db.sqlite3
 dump.json
+
+# build
+kraken-agent/agent/build

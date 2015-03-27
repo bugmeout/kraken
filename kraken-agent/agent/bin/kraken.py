@@ -173,7 +173,6 @@ class Kraken(multiprocessing.Process):
 			open(os.path.join(self.maindir, 'log.html'), 'w').write(r.content)
 			if r.status_code == 500:
 				open(os.path.join(self.maindir, 'log-error.html'), 'w').write(r.content)
-				exit()
 			r.raise_for_status() # this will raise an exception if code is 4xx/5xx
 			self.log("SUCCESS: %s" % r.status_code)
 			data = r.content

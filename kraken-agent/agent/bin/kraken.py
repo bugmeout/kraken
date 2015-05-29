@@ -481,7 +481,7 @@ if __name__ == '__main__':
             if sys.argv[1] == 'runhash':
                 if len(sys.argv) == 3:
                     k.delay_ms = int(sys.argv[2])
-                self.refresh_hash_lists()
+                k.refresh_hash_lists()
             if sys.argv[1] == 'standalone':
                 k.run()
         else:
